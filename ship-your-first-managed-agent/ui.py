@@ -1,10 +1,14 @@
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
-"""Tiny shared UI helpers — load CSS and render the alert banner."""
+"""Tiny shared UI helpers — load CSS and render the open pages."""
+import json
+from html import escape
 from pathlib import Path
+
 import streamlit as st
 
 _ROOT = Path(__file__).parent
+INCIDENTS = json.loads((_ROOT / "data" / "incidents.json").read_text())
 
 
 def inject_style():
@@ -12,17 +16,19 @@ def inject_style():
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
-def alert_banner():
-    st.markdown(
-        """
-<div class="pager-alert">
-  <span class="badge">CRITICAL</span>
-  <span class="title">checkout · p99 latency 10× baseline</span>
-  <div class="meta">triggered 2026-04-22 14:32:07 UTC · policy: page-oncall · ack: —</div>
-</div>
-""",
-        unsafe_allow_html=True,
+def alert_banner(compact: bool = True):
+    """One banner per open page. `compact` is the slim strip used on sub-pages."""
+    cls = "pager-alert compact" if compact else "pager-alert"
+    rows = "".join(
+        f"""
+<div class="{cls} {escape(inc['severity'])}">
+  <span class="badge">{escape(inc['severity'].upper())}</span>
+  <span class="title">{escape(inc['id'])} · {escape(inc['title'])}</span>
+  <div class="meta">triggered {escape(inc['fired_at'].replace('T', ' ').replace('Z', ' UTC'))} · {escape(inc['signal'])} · ack: —</div>
+</div>"""
+        for inc in INCIDENTS
     )
+    st.markdown(rows, unsafe_allow_html=True)
 
 
 PLOTLY_LAYOUT = dict(

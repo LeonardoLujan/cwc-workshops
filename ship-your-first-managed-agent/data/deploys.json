@@ -16,6 +16,14 @@
     "summary": "add rate limiting to /refresh"
   },
   {
+    "ts": "2026-04-22T14:12:40Z",
+    "service": "inventory",
+    "commit": "c81d4e7",
+    "author": "erin@shop.io",
+    "status": "success",
+    "summary": "simplify SKU availability lookup ahead of cache-key migration"
+  },
+  {
     "ts": "2026-04-22T14:31:18Z",
     "service": "checkout",
     "commit": "a3f9c21",

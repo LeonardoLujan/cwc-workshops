@@ -1,0 +1,17 @@
+commit e21b6c9d47f0a1b3c5e7f9a2b4c6d8e0f1a3b5c7
+Author: Dave Okafor <dave@shop.io>
+Date:   Wed Apr 22 09:11:40 2026 +0000
+
+    bump lodash to 4.17.22
+
+diff --git a/cart/web/package.json b/cart/web/package.json
+index 71c0a2e..3d9b8f4 100644
+--- a/cart/web/package.json
++++ b/cart/web/package.json
+@@ -12,7 +12,7 @@
+   "dependencies": {
+     "express": "4.19.2",
+-    "lodash": "4.17.21",
++    "lodash": "4.17.22",
+     "pg": "8.11.5"
+   },

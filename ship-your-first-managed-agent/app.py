@@ -4,13 +4,11 @@ import json
 from pathlib import Path
 
 import streamlit as st
-from dotenv import load_dotenv
 
-from ui import inject_style, alert_banner
+from ui import INCIDENTS, inject_style, alert_banner
 from provided import chat_panel
 
-load_dotenv()
-st.set_page_config(page_title="Incident · 2277", page_icon="▮", layout="wide")
+st.set_page_config(page_title="On-call · 3 pages open", page_icon="▮", layout="wide")
 inject_style()
 
 # Generate the synthetic log fixture on first run (~0.5 s, deterministic).
@@ -31,44 +29,46 @@ if not LOG_FIXTURE.exists():
 
 
 def overview():
-    main, side = st.columns([5, 3], gap="large")
+    main, side = st.columns([3, 5], gap="large")
 
     with main:
-        st.title("INCIDENT-2277")
+        st.markdown("### ON-CALL · 3 PAGES OPEN")
         alert_banner()
 
         DATA = Path(__file__).parent / "data"
         metrics = json.loads((DATA / "metrics.json").read_text())
-        p99 = metrics["checkout"]["p99_latency_ms"]
-        peak, base = max(d["value"] for d in p99), p99[0]["value"]
-        err = max(d["value"] for d in metrics["checkout"]["error_rate"])
+
+        def peak(service: str, metric: str) -> float:
+            return max(d["value"] for d in metrics[service][metric])
+
+        def base(service: str, metric: str) -> float:
+            return metrics[service][metric][0]["value"]
 
         r1c1, r1c2 = st.columns(2)
-        r1c1.metric("P99 LATENCY", f"{peak:,.0f} ms", f"{(peak/base-1)*100:+.0f}%", delta_color="inverse")
-        r1c2.metric("ERROR RATE", f"{err*100:.1f}%", f"+{err*100:.1f} pp", delta_color="inverse")
+        r1c1.metric("CHECKOUT P99", f"{peak('checkout', 'p99_latency_ms'):,.0f} ms",
+                    f"{(peak('checkout', 'p99_latency_ms') / base('checkout', 'p99_latency_ms') - 1) * 100:+,.0f}%",
+                    delta_color="inverse")
+        r1c2.metric("INVENTORY P99", f"{peak('inventory', 'p99_latency_ms'):,.0f} ms",
+                    f"{(peak('inventory', 'p99_latency_ms') / base('inventory', 'p99_latency_ms') - 1) * 100:+,.0f}%",
+                    delta_color="inverse")
         r2c1, r2c2 = st.columns(2)
-        r2c1.metric("DB POOL", "100%", "+90 pp", delta_color="inverse")
-        r2c2.metric("DURATION", "28 min", "ongoing")
+        r2c1.metric("CART ERROR RATE", f"{peak('cart', 'error_rate') * 100:.1f}%",
+                    f"+{peak('cart', 'error_rate') * 100:.1f} pp", delta_color="inverse")
+        r2c2.metric("DB-PRIMARY CPU", f"{peak('db-primary', 'cpu_utilization') * 100:.0f}%",
+                    f"+{(peak('db-primary', 'cpu_utilization') - base('db-primary', 'cpu_utilization')) * 100:.0f} pp",
+                    delta_color="inverse")
 
-        st.divider()
-        st.markdown("##### AFFECTED SERVICE")
+        paged = {inc["service"]: inc["severity"] for inc in INCIDENTS}
         st.markdown(
-            '<span class="pill crit">checkout</span> &nbsp; '
-            '<span class="pill ok">cart</span> &nbsp; '
-            '<span class="pill ok">auth</span> &nbsp; '
-            '<span class="pill ok">inventory</span>',
+            " &nbsp; ".join(
+                f'<span class="pill {"crit" if paged.get(svc) == "critical" else "warn" if svc in paged else "ok"}">{svc}</span>'
+                for svc in ["checkout", "cart", "auth", "inventory"]
+            ),
             unsafe_allow_html=True,
-        )
-        st.markdown("##### SIGNAL")
-        st.code(
-            "14:32:07  alert fired   checkout.p99_latency_ms > 500 for 5m\n"
-            "14:32:11  paged         @oncall-platform\n"
-            "14:32:14  ack           —",
-            language=None,
         )
 
     with side:
-        chat_panel()
+        chat_panel(wide=True)
 
 
 st.navigation([
@@ -76,4 +76,5 @@ st.navigation([
     st.Page("pages/1_Metrics.py", title="Metrics"),
     st.Page("pages/2_Logs.py", title="Logs"),
     st.Page("pages/3_Deploys.py", title="Deploys"),
+    st.Page("pages/4_Memory.py", title="Memory"),
 ]).run()

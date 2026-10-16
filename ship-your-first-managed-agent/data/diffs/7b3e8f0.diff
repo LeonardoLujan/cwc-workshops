@@ -1,0 +1,17 @@
+commit 7b3e8f0c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a
+Author: Carol Nguyen <carol@shop.io>
+Date:   Wed Apr 22 14:53:27 2026 +0000
+
+    add SKU validation on reserve endpoint
+
+diff --git a/inventory/routes.py b/inventory/routes.py
+index 6a8c0e2..1f3b5d7 100644
+--- a/inventory/routes.py
++++ b/inventory/routes.py
+@@ -31,6 +31,8 @@ def check(request):
+
+ @router.post("/api/inventory/reserve")
+ def reserve(request):
++    if not SKU_PATTERN.fullmatch(request.json["sku"]):
++        raise BadRequest("malformed sku")
+     return reserve_units(request.json["sku"], request.json["qty"])

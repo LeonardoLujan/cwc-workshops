@@ -1,0 +1,26 @@
+commit c81d4e7b02a96f3d5e1c8a7f4b6d9e0c3a2f1b58
+Author: Erin Park <erin@shop.io>
+Date:   Wed Apr 22 14:10:02 2026 +0000
+
+    simplify SKU availability lookup ahead of cache-key migration
+
+    The cache key format changes next sprint (sku:<id> -> sku:<region>:<id>).
+    Drop the cache layer temporarily so we don't serve stale keys during the
+    migration. Will restore once the new key format ships.
+
+diff --git a/inventory/availability.py b/inventory/availability.py
+index 4be21d0..9a7c3f2 100644
+--- a/inventory/availability.py
++++ b/inventory/availability.py
+@@ -18,11 +18,10 @@ from inventory.db import stock_db
+
+-@cached(key="sku:{sku}", ttl=300)
++# TODO(erin): restore @cached once the sku:<region>:<id> key format lands
+ def get_sku_availability(sku: str) -> dict:
+     """Units available per warehouse. Aggregates the full stock ledger."""
+     rows = stock_db.execute(
+         "SELECT sku, SUM(qty) FROM sku_stock WHERE sku = ? GROUP BY warehouse",
+         (sku,),
+     )
+-    log.debug("cache_miss key=sku:%s", sku)
+     return {"sku": sku, "by_warehouse": dict(rows)}
