@@ -29,22 +29,25 @@ You do it in four parts on [Claude Managed Agents](https://platform.claude.com/d
 You need Python **3.10+**, [Claude Code](https://claude.com/claude-code) and an Anthropic API key. In a workshop, the organiser gives you the key.
 
 ```bash
-git clone https://github.com/anthropics/cwc-workshops
+git clone -b sre-advanced https://github.com/anthropics/cwc-workshops
 cd cwc-workshops/ship-your-first-managed-agent
+./setup.sh
+```
 
+`setup.sh` creates a virtualenv, installs the packages, asks for your API key, generates the log and starts the dashboard. On Windows, or to do it by hand:
+
+```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-
 pip install -r requirements.txt
 cp .env.example .env               # then put the ANTHROPIC_API_KEY in .env
-
 python data/generate_log.py        # writes data/app.log (74k lines, not in git)
 streamlit run app.py
 ```
 
 The dashboard opens at `localhost:8501`. Click around: Metrics, Logs and Deploys all work. The SRE Agent panel says *"agent offline"*.
 
-Now open Claude Code in this directory, in a second terminal.
+Now open a second terminal in this directory and run `claude`.
 
 ## Part 1: one agent (10 min)
 
@@ -187,6 +190,7 @@ Every agent runs on `claude-opus-5-5`. Each agent has its own model, so you can 
 agent.py            the stubs Claude Code fills in
 check.py            headless check of each part against the live API
 cleanup.py          removes your cloud resources
+setup.sh            one command: virtualenv, packages, key, log, dashboard
 CLAUDE.md           instructions Claude Code reads
 AGENTS.md           the same instructions, for other coding agents
 
