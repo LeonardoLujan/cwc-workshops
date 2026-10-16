@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 data/app.log
 .claude/
+.sre-state.json
+outputs/

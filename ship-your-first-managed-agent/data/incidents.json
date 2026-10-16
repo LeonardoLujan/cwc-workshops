@@ -1,0 +1,26 @@
+[
+  {
+    "id": "INC-2276",
+    "service": "inventory",
+    "severity": "high",
+    "signal": "inventory.p99_latency_ms > 300 for 3m",
+    "title": "inventory · p99 latency 10× baseline",
+    "fired_at": "2026-04-22T14:16:05Z"
+  },
+  {
+    "id": "INC-2277",
+    "service": "checkout",
+    "severity": "critical",
+    "signal": "checkout.p99_latency_ms > 500 for 3m",
+    "title": "checkout · p99 latency 50× baseline",
+    "fired_at": "2026-04-22T14:36:07Z"
+  },
+  {
+    "id": "INC-2278",
+    "service": "cart",
+    "severity": "high",
+    "signal": "cart.error_rate > 5% for 3m",
+    "title": "cart · 12% of requests failing",
+    "fired_at": "2026-04-22T14:43:30Z"
+  }
+]
