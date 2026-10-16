@@ -95,7 +95,7 @@ def inventory_request(buf: list, ts: datetime) -> None:
          msg=f"request_start method=POST path={ep}", request_id=req, user_id=user)
 
     if ts < INVENTORY_DEPLOY_TS:
-        if rng.random() < 0.92:
+        if rng.random() < 0.995:
             lat = rng.randint(20, 60)
             emit(buf, ts + ms(2), level="DEBUG", service="inventory", host=host,
                  msg=f"cache_hit key=sku:{sku} ttl_left_s={rng.randint(5, 299)}", request_id=req)
@@ -284,7 +284,7 @@ def write_metrics() -> None:
         "inventory": {
             "p99_latency_ms": series(lambda m: u(380, 620) if m >= 13 else u(30, 46)),
             "error_rate": series(lambda m: u(0.001, 0.004)),
-            "cache_hit_rate": series(lambda m: 0.0 if m >= 13 else (0.62 if m == 12 else u(0.90, 0.95))),
+            "cache_hit_rate": series(lambda m: 0.0 if m >= 13 else (0.62 if m == 12 else u(0.990, 0.999))),
         },
         "db-primary": {
             "queries_per_sec": series(lambda m: ramp(m, 32, [212], lambda: u(38, 46), lambda: u(430, 520)), 1),

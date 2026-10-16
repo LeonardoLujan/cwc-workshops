@@ -163,8 +163,9 @@ def cover(r: Report, incidents: list[dict], summary: dict) -> None:
     r.fig.add_artist(Rectangle((0, 0.885), 1, 0.115, color=DARK, transform=r.fig.transFigure))
     r.fig.add_artist(Rectangle((0, 0.881), 1, 0.004, color=ACCENT, transform=r.fig.transFigure))
     r.fig.text(LEFT, 0.965, "POSTMORTEM", fontsize=9, color=ACCENT, weight="bold", va="top")
-    title = textwrap.shorten(clean(summary.get("title") or "Incident report"), 70, placeholder="…")
-    r.fig.text(LEFT, 0.945, title, fontsize=17, color="white", weight="bold", va="top")
+    title = textwrap.shorten(clean(summary.get("title") or "Incident report"), 90, placeholder="…")
+    size = max(10.5, min(17.0, 17.0 * 44 / max(len(title), 1)))  # shrink long titles to fit the page width
+    r.fig.text(LEFT, 0.945, title, fontsize=size, color="white", weight="bold", va="top")
     r.fig.text(LEFT, 0.905, f"{len(incidents)} pages  ·  {n_causes} root causes  ·  times in UTC",
                fontsize=9, color="#c9d1d9", va="top")
     r.y = 0.86

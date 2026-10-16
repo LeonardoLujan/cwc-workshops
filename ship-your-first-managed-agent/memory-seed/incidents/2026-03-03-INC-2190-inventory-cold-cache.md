@@ -2,7 +2,7 @@
 
 Root cause: redis restart during maintenance emptied the SKU availability cache. Every lookup fell through to the ledger aggregate on db-inventory, which takes 200 to 500ms uncached.
 
-How we spotted it: `cache_hit` lines dropped to zero and `sku_stock` queries went from about 1/s to about 12/s.
+How we spotted it: `cache_hit` lines dropped to zero and `sku_stock` queries went from almost none to about 1/s on every request.
 
 Fix: the cache refilled on its own in about six minutes.
 
