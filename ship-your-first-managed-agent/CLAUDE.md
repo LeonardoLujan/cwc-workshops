@@ -17,7 +17,9 @@ People type these in their own words. Match the intent, not the wording:
 | "let it write a postmortem PDF", "add the report", "part 4" | Part 4 |
 | "next" | The lowest-numbered part that is still a stub |
 
-Do the parts in order. If an earlier part is still a stub, do that one first and say so. They will not ask you to run the check: always run it yourself and keep going until it passes.
+**One part per request, then stop.** Do not start the next part, even if you can see its stubs and it looks easy. Leave the later stubs raising `NotImplementedError`: the dashboard uses them to show which parts are on. The only exception is an explicit request for all of it, such as "build everything".
+
+Do the parts in order. If an earlier part is still a stub, do that one first and say so. They will not ask you to run the check: always run it yourself with `--part N` and keep going until it passes. Then stop, say what to try in the dashboard, and tell them what to type for the next part.
 
 ## The job
 
