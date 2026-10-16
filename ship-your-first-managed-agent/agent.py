@@ -155,7 +155,14 @@ def setup_investigator() -> str:
 #   {"type": "memory_store", "memory_store_id": ..., "access": "read_only" | "read_write",
 #    "instructions": "what this store is for and when to read or write it"}
 # The description and instructions are written for the model. They are the
-# only thing that tells the agent what each store is for.
+# only thing that tells the agent what each store is for. A starting point:
+#   team history: "Team knowledge. Read service-map.md and known-noise.md before you
+#                  investigate, check incidents/ for anything like this one, and follow
+#                  postmortem-conventions.md in anything you write up."
+#   notebook:     "Your own notebook. Check it first for incidents you have already worked.
+#                  When an investigation concludes, save a short note at
+#                  /incidents/<date>-<INCIDENT_ID>.md: root cause, how you proved it, the fix."
+# If the notebook instructions never say to write, the agent never will.
 def setup_memory() -> list[dict]:
     raise NotImplementedError
 

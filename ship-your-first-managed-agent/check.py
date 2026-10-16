@@ -12,6 +12,7 @@ and ends with PASS or FAIL per part. The session it creates stays in your
 session picker so you can open it in the dashboard afterwards.
 """
 import argparse
+import logging
 import os
 import sys
 import time
@@ -19,6 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 DEADLINE_S = 15 * 60
+logging.getLogger("streamlit").setLevel(logging.ERROR)  # "No runtime found" is expected outside the dashboard
 
 
 def text_of(content) -> str:

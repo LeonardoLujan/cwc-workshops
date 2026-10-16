@@ -13,6 +13,8 @@
 
 A working on-call dashboard for a fictional e-commerce stack. Metrics, Logs and Deploys run out of the box from mock data. There is an **SRE Agent** panel on every page, and it is offline. Bringing it online is the workshop.
 
+Each check and each question to the agent takes one to three minutes, because `check.py` runs the real agent against the live API.
+
 You do it in four parts on [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview). Claude Code writes the API code. You make the decisions that need judgment.
 
 | Part | You add | What you see |
