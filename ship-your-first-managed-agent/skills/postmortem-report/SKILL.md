@@ -21,6 +21,7 @@ You build the PDF yourself, in your sandbox. There is no template. Design it so 
 - The investigators' findings are in `/workspace/findings/*.json`. Start from those instead of investigating again.
 - Save the result to `/mnt/session/outputs/postmortem.pdf`. Only files under `/mnt/session/outputs/` reach the user.
 - Be quick: write one script, run it, and fix it only if it errors. Two to four pages. Do not render the PDF to images to inspect it.
+- Keep everything inside the page margins: wrap the title and any long table cell instead of letting it run off the edge.
 - Follow any postmortem conventions you find in team memory.
 
 When it is built, tell the user the file name in one or two sentences. Do not paste the report into the chat.
