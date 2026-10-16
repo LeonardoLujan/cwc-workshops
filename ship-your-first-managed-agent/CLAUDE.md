@@ -27,7 +27,7 @@ Do the parts in order. If an earlier part is still a stub, do that one first and
 
 1. Read the stub comments for that part. They give the exact call shapes and the values you cannot look up (model constants, mount paths, the beta header). Use them as written.
 2. Implement only that part's functions, plus the small additions the comments name in earlier functions (the roster in `setup_agent()`, the memory resources in `start_session()`, the second skill).
-3. Run `.venv/bin/python check.py --part N` (plain `python` if there is no `.venv`; `.venv\\Scripts\\python` on Windows). It drives the live API and prints PASS or FAIL per part. Fix what fails and run it again.
+3. Run `.venv/bin/python check.py --part N` (plain `python` if there is no `.venv`; `.venv\Scripts\python` on Windows). It drives the live API and prints PASS or FAIL per part. Fix what fails and run it again.
 4. Explain what you did in three short bullets: what changed, the Managed Agents concept it uses, and where to see it in the dashboard.
 
 ## Rules
