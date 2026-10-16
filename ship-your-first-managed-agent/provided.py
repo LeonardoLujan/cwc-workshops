@@ -5,7 +5,7 @@ Everything pre-supplied for the workshop: model choices, prompts, tool
 schemas, the local data those tools read, and the side-chat UI. You don't
 edit this file — agent.py imports from it.
 
-The parts you are meant to change live elsewhere:
+The things worth changing live elsewhere (ask Claude Code to change them):
   prompts/        what the commander and the investigators are told
   skills/         the runbook and the postmortem builder
   memory-seed/    what the team already knows

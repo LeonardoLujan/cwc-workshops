@@ -184,7 +184,7 @@ Every agent runs on `claude-opus-5-5`. Each agent has its own model, so you can 
 ## Repo layout
 
 ```
-agent.py            the only Python file you edit
+agent.py            the stubs Claude Code fills in
 check.py            headless check of each part against the live API
 cleanup.py          removes your cloud resources
 CLAUDE.md           instructions Claude Code reads
