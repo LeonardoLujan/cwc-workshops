@@ -76,6 +76,8 @@ Claude adds a second agent, the investigator, and puts it on the commander's ros
 
 The commander opens one **thread** per page. Each thread is an investigator with its own context and its own model setting, sharing one container. Their custom tool calls arrive on the same stream as the commander's. When they report back, the commander compares root causes.
 
+Before moving on, start one more session and give it the same three pages. It starts from zero and does all the work again. Sessions share nothing with each other yet. Part 3 fixes that.
+
 **Your turn:** `prompts/investigator.md` decides what each investigator does and what it hands back. Change it and run the incident again.
 
 ## Part 3: memory stores (12 min)
