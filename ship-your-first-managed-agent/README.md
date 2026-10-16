@@ -29,7 +29,7 @@ You do it in four parts on [Claude Managed Agents](https://platform.claude.com/d
 You need Python **3.10+**, [Claude Code](https://claude.com/claude-code) and an Anthropic API key. In a workshop, the organiser gives you the key.
 
 ```bash
-git clone -b sre-advanced https://github.com/anthropics/cwc-workshops
+git clone https://github.com/anthropics/cwc-workshops
 cd cwc-workshops/ship-your-first-managed-agent
 ./setup.sh
 ```
