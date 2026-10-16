@@ -107,13 +107,13 @@ Now start one more session and give it the same three pages. This time the comma
 Do Part 4 in agent.py, then run python check.py --part 4 until it passes.
 ```
 
-Claude attaches a second skill, `postmortem-report`, and implements the download. The skill ships a script, so the agent builds the PDF in about a second instead of writing layout code. Ask:
+Claude attaches a second skill, `postmortem-report`, and implements the download. The skill only says what a postmortem must contain. The agent writes and runs its own code in the sandbox to build the PDF, with charts it computes from the log. Ask:
 
 > Write the postmortem PDF.
 
 Anything the agent writes under `/mnt/session/outputs/` comes back through the Files API. A download button appears under the chat.
 
-**Your turn:** `skills/postmortem-report/` is yours. Change what the report must contain in `SKILL.md`. Editing the folder publishes a new version of the skill.
+**Your turn:** `skills/postmortem-report/SKILL.md` is yours. Change what the report must contain or how it should look, then ask for the PDF again in a new session. You never touch layout code: the agent rewrites its own. Editing the folder publishes a new version of the skill.
 
 ## The incidents (spoilers)
 
@@ -151,11 +151,11 @@ Every agent runs on `claude-opus-5-5`. Each agent has its own model, so you can 
 ## What this teaches
 
 - **Agents, environments, sessions, events**: the four core Managed Agents resources
-- **Skills**: a folder the agent loads on demand, with scripts, published as versions
+- **Skills**: a folder of instructions the agent loads on demand, published as versions
 - **Custom tools**: the agent in the cloud calls functions on your laptop over the event stream
 - **Multiagent**: a coordinator with a roster of agents, each running as a thread
 - **Memory stores**: persistent folders mounted into the session, read-only or read-write
-- **Session outputs**: files the agent writes, downloaded through the Files API
+- **Sandbox and session outputs**: the agent writes and runs code in its container, and the files it produces are downloaded through the Files API
 
 ## Repo layout
 

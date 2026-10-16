@@ -1,40 +1,26 @@
 ---
 name: postmortem-report
-description: Builds the team's postmortem PDF from incident findings. Use this whenever asked for a postmortem, an incident report, a write-up to share, or a PDF of what happened.
+description: How the SRE team writes a postmortem PDF. Use this whenever asked for a postmortem, an incident report, a write-up to share, or a PDF of what happened.
 ---
 
 # Postmortem report
 
-The PDF is built by a script, not by hand. It takes about a second. Be quick: do not read the script, do not render or inspect the PDF afterwards, and do not rewrite findings files that are already there.
+You build the PDF yourself, in your sandbox. There is no template. Design it so a director understands the event in one minute and an engineer can check every claim.
 
-## Steps
+## What it must contain
 
-1. Make sure there is one findings file per incident in `/workspace/findings/` (schema: the "Write-up" section of the incident-triage-runbook skill). Investigators usually wrote these already. If one is missing, write it from what you know.
-2. Write `/workspace/findings/summary.json`:
+1. A headline and a summary of three or four sentences.
+2. A table of pages: page id, service, root cause. Pages that share a root cause are one incident; mark the others as symptoms.
+3. At least one chart drawn from real data. Compute it in your script from `/mnt/session/uploads/app.log` (for example p99 latency or error rate per minute for each paged service) and mark the deploys on it.
+4. For each root cause: a timeline in UTC, the evidence that proves it, what was ruled out, and the fix.
+5. Action items, each with an owner team and a priority.
 
-   ```json
-   {
-     "title": "short headline for the whole event",
-     "summary": "three or four sentences a director can read in 20 seconds",
-     "root_causes": [
-       {"ref": "<sha or component>", "incidents": ["INC-0000"], "summary": "one sentence"}
-     ],
-     "actions": [
-       {"owner": "team or role", "action": "what to do", "priority": "now | this week | later"}
-     ]
-   }
-   ```
+## How to build it
 
-3. Run the script from this skill's directory:
-
-   ```bash
-   python scripts/build_report.py --findings /workspace/findings --out /mnt/session/outputs/postmortem.pdf
-   ```
-
-4. Tell the user the report is ready and name the file. Don't paste the report into the chat.
-
-## Rules
-
-- Files only reach the user if they are written under `/mnt/session/outputs/`.
-- If the script reports a problem with a findings file, fix that file and run it again.
+- Python with matplotlib and pandas is installed. `matplotlib.backends.backend_pdf.PdfPages` writes multi-page PDFs. pandoc and LaTeX are there too. Use whichever you can do fastest.
+- The investigators' findings are in `/workspace/findings/*.json`. Start from those instead of investigating again.
+- Save the result to `/mnt/session/outputs/postmortem.pdf`. Only files under `/mnt/session/outputs/` reach the user.
+- Be quick: write one script, run it, and fix it only if it errors. Two to four pages. Do not render the PDF to images to inspect it.
 - Follow any postmortem conventions you find in team memory.
+
+When it is built, tell the user the file name in one or two sentences. Do not paste the report into the chat.

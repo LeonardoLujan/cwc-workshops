@@ -32,7 +32,7 @@ These files are theirs. Point them at the right one after each part, and let the
 | 1 | What the commander is told | `prompts/commander.md` |
 | 2 | How an investigator is briefed and what it hands back | `prompts/investigator.md` |
 | 3 | What the team already knows | `memory-seed/*.md` |
-| 4 | What goes in the postmortem | `skills/postmortem-report/` |
+| 4 | What the postmortem must contain and how it should look | `skills/postmortem-report/SKILL.md` |
 
 Changes take effect on the next dashboard rerun or `check.py` run: a changed prompt becomes a new agent version, a changed skill folder becomes a new skill version, and a changed `memory-seed/` becomes a freshly seeded store. Sessions already running keep what they started with, so start a new session to see a change.
 
