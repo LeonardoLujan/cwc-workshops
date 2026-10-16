@@ -188,6 +188,7 @@ agent.py            the stubs Claude Code fills in
 check.py            headless check of each part against the live API
 cleanup.py          removes your cloud resources
 CLAUDE.md           instructions Claude Code reads
+AGENTS.md           the same instructions, for other coding agents
 
 prompts/            what the commander and investigators are told
 skills/             incident-triage-runbook, postmortem-report
