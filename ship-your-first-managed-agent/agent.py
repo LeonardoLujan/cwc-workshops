@@ -1,7 +1,7 @@
 # Copyright 2026 Anthropic PBC
 # SPDX-License-Identifier: Apache-2.0
 """
-The SRE Agent. The only Python file you edit.
+The SRE Agent. The only Python file Claude Code fills in for you.
 
     Part 1  one agent            functions 1-8   the panel comes online
     Part 2  multiagent           setup_investigator() + a roster on the commander

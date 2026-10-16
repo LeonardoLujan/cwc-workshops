@@ -15,7 +15,7 @@ A working on-call dashboard for a fictional e-commerce stack. Metrics, Logs and 
 
 Each check and each question to the agent takes one to three minutes, because `check.py` runs the real agent against the live API.
 
-You do it in four parts on [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview). Claude Code writes the API code. You make the decisions that need judgment.
+You do it in four parts on [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview). Claude Code writes all of it. You paste one prompt per part, then talk to the agent you just built. There is nothing to type by hand.
 
 | Part | You add | What you see |
 |---|---|---|
@@ -62,7 +62,13 @@ When the check passes, reload the dashboard, click **+** for a new session and a
 
 Watch the tool calls. `sandbox` calls run in the agent's cloud container. `local` calls run on your laptop, in `handle_tool()`.
 
-**Your turn:** open `prompts/commander.md` and change how it answers. Reload and start a new session. The agent ID stays the same; you just published version 2.
+**Optional, also a prompt for Claude Code:**
+
+```
+Change prompts/commander.md so the commander ends every answer with a one-line status for an executive.
+```
+
+Then start a new session and ask again. The agent ID stays the same; you just published version 2.
 
 ## Part 2: multiagent (15 min)
 
@@ -80,7 +86,13 @@ The commander opens one **thread** per page. Each thread is an investigator with
 
 Before moving on, start one more session and give it the same three pages. It starts from zero and does all the work again. Sessions share nothing with each other yet. Part 3 fixes that.
 
-**Your turn:** `prompts/investigator.md` decides what each investigator does and what it hands back. Change it and run the incident again.
+**Optional, also a prompt for Claude Code:**
+
+```
+Change prompts/investigator.md so each investigator also gives a confidence score from 1 to 5.
+```
+
+Then start a new session and ask again.
 
 ## Part 3: memory stores (12 min)
 
@@ -99,7 +111,13 @@ Start a new session (memory attaches when a session is created) and run the inci
 
 Now start one more session and give it the same three pages. This time the commander finds its own notes and answers in well under a minute, often without opening a single thread. In our test the first run took about two minutes and the repeat took 47 seconds.
 
-**Your turn:** add a file to `memory-seed/`. A team convention works well: the agent will follow it in the next session.
+**Optional, also a prompt for Claude Code:**
+
+```
+Add a team convention to memory-seed/: every postmortem ends with one line on customer impact.
+```
+
+Then start a new session and ask again. The agent follows the new convention.
 
 ## Part 4: file output (10 min)
 
@@ -113,7 +131,13 @@ Claude attaches a second skill, `postmortem-report`, and implements the download
 
 Anything the agent writes under `/mnt/session/outputs/` comes back through the Files API. A download button appears under the chat.
 
-**Your turn:** `skills/postmortem-report/SKILL.md` is yours. Change what the report must contain or how it should look, then ask for the PDF again in a new session. You never touch layout code: the agent rewrites its own. Editing the folder publishes a new version of the skill.
+**Optional, also a prompt for Claude Code:**
+
+```
+Change skills/postmortem-report/SKILL.md so the report opens with a one-page executive summary.
+```
+
+Then start a new session and ask again. Nobody touches layout code: the agent rewrites its own. Editing the folder publishes a new version of the skill.
 
 ## The incidents (spoilers)
 
