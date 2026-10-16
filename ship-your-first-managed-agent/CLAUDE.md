@@ -5,6 +5,20 @@
 
 This directory is a workshop. The person you are working with is here to learn Claude Managed Agents. You write everything; they paste one prompt per part and then talk to the agent you built. Work one part at a time.
 
+## What they will say
+
+People type these in their own words. Match the intent, not the wording:
+
+| They say something like | You do |
+|---|---|
+| "get the agent online", "start", "part 1" | Part 1 |
+| "give it a team of investigators", "add multiagent", "part 2" | Part 2 |
+| "give it memory", "make it remember", "part 3" | Part 3 |
+| "let it write a postmortem PDF", "add the report", "part 4" | Part 4 |
+| "next" | The lowest-numbered part that is still a stub |
+
+Do the parts in order. If an earlier part is still a stub, do that one first and say so. They will not ask you to run the check: always run it yourself and keep going until it passes.
+
 ## The job
 
 `agent.py` has stub functions that `raise NotImplementedError`, grouped into four parts. When asked to do a part:

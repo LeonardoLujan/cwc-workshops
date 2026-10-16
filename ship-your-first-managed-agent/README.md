@@ -48,10 +48,10 @@ Now open Claude Code in this directory, in a second terminal.
 
 ## Part 1: one agent (10 min)
 
-Paste into Claude Code:
+Type into Claude Code, in your own words if you like:
 
 ```
-Do Part 1 in agent.py, then run python check.py --part 1 until it passes.
+get the agent online
 ```
 
 Claude fills in eight functions: an **environment**, the uploaded log, a **skill**, the **agent**, a **session**, the **event** stream loop, the **custom tool** handlers and session delete.
@@ -65,7 +65,7 @@ Watch the tool calls. `sandbox` calls run in the agent's cloud container. `local
 **Optional, also a prompt for Claude Code:**
 
 ```
-Change prompts/commander.md so the commander ends every answer with a one-line status for an executive.
+make the commander end every answer with a one-line status for an exec
 ```
 
 Then start a new session and ask again. The agent ID stays the same; you just published version 2.
@@ -75,7 +75,7 @@ Then start a new session and ask again. The agent ID stays the same; you just pu
 One agent can work one page. Three pages at once need a team.
 
 ```
-Do Part 2 in agent.py, then run python check.py --part 2 until it passes.
+give it a team of investigators
 ```
 
 Claude adds a second agent, the investigator, and puts it on the commander's roster. Start a new session and say:
@@ -89,7 +89,7 @@ Before moving on, start one more session and give it the same three pages. It st
 **Optional, also a prompt for Claude Code:**
 
 ```
-Change prompts/investigator.md so each investigator also gives a confidence score from 1 to 5.
+have each investigator rate its confidence from 1 to 5
 ```
 
 Then start a new session and ask again.
@@ -99,7 +99,7 @@ Then start a new session and ask again.
 Every session so far started from nothing. The team knows things: which services share a database, what the noisy log lines are, what happened last time.
 
 ```
-Do Part 3 in agent.py, then run python check.py --part 3 until it passes.
+give it memory
 ```
 
 Claude creates two **memory stores** and mounts both into the session:
@@ -114,7 +114,7 @@ Now start one more session and give it the same three pages. This time the comma
 **Optional, also a prompt for Claude Code:**
 
 ```
-Add a team convention to memory-seed/: every postmortem ends with one line on customer impact.
+teach the team memory a new convention: every postmortem ends with a line on customer impact
 ```
 
 Then start a new session and ask again. The agent follows the new convention.
@@ -122,7 +122,7 @@ Then start a new session and ask again. The agent follows the new convention.
 ## Part 4: file output (10 min)
 
 ```
-Do Part 4 in agent.py, then run python check.py --part 4 until it passes.
+let it write a postmortem PDF
 ```
 
 Claude attaches a second skill, `postmortem-report`, and implements the download. The skill only says what a postmortem must contain. The agent writes and runs its own code in the sandbox to build the PDF, with charts it computes from the log. Ask:
@@ -134,7 +134,7 @@ Anything the agent writes under `/mnt/session/outputs/` comes back through the F
 **Optional, also a prompt for Claude Code:**
 
 ```
-Change skills/postmortem-report/SKILL.md so the report opens with a one-page executive summary.
+make the postmortem open with a one-page exec summary
 ```
 
 Then start a new session and ask again. Nobody touches layout code: the agent rewrites its own. Editing the folder publishes a new version of the skill.
