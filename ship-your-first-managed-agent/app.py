@@ -29,11 +29,11 @@ if not LOG_FIXTURE.exists():
 
 
 def overview():
-    main, side = st.columns([5, 3], gap="large")
+    main, side = st.columns([3, 5], gap="large")
 
     with main:
-        st.title("ON-CALL · 3 PAGES OPEN")
-        alert_banner(compact=False)
+        st.markdown("### ON-CALL · 3 PAGES OPEN")
+        alert_banner()
 
         DATA = Path(__file__).parent / "data"
         metrics = json.loads((DATA / "metrics.json").read_text())
@@ -58,8 +58,6 @@ def overview():
                     f"+{(peak('db-primary', 'cpu_utilization') - base('db-primary', 'cpu_utilization')) * 100:.0f} pp",
                     delta_color="inverse")
 
-        st.divider()
-        st.markdown("##### SERVICES")
         paged = {inc["service"]: inc["severity"] for inc in INCIDENTS}
         st.markdown(
             " &nbsp; ".join(
@@ -68,17 +66,9 @@ def overview():
             ),
             unsafe_allow_html=True,
         )
-        st.markdown("##### SIGNAL")
-        st.code(
-            "\n".join(
-                f"{inc['fired_at'][11:19]}  alert fired   {inc['signal']:<40}  paged @oncall-platform   ack —"
-                for inc in INCIDENTS
-            ),
-            language=None,
-        )
 
     with side:
-        chat_panel()
+        chat_panel(wide=True)
 
 
 st.navigation([

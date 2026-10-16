@@ -109,7 +109,7 @@ Claude creates two **memory stores** and mounts both into the session:
 
 Start a new session (memory attaches when a session is created) and run the incident again. Then open the **Memory** page: the notebook now has notes the agent wrote, with a version history showing which session wrote them.
 
-Now start one more session and give it the same three pages. This time the commander finds its own notes and answers in well under a minute, often without opening a single thread. In our test the first run took about two minutes and the repeat took 47 seconds.
+Now start one more session and give it the same three pages. This time the commander starts from its own notes. Sometimes it answers straight from them in under a minute; sometimes it sends the investigators back out to re-check what the notes say.
 
 **Optional, also a prompt for Claude Code:**
 

@@ -16,6 +16,7 @@ import json
 import os
 import re
 import time
+from html import escape
 from pathlib import Path
 
 import streamlit as st
@@ -97,9 +98,30 @@ def implemented(fn) -> bool:
 
 
 # ── side-chat UI ──────────────────────────────────────────────────────────
+PART_ONE = ("setup_environment", "upload_log", "setup_skill", "setup_agent",
+            "start_session", "stream_reply", "handle_tool", "delete_session")
+
+
+def next_step(agent) -> str | None:
+    """What to type into Claude Code next, or None when all four parts are on."""
+    if not all(implemented(getattr(agent, fn)) for fn in PART_ONE):
+        return "get the agent online"
+    if not implemented(agent.setup_investigator):
+        return "give it a team of investigators"
+    if not implemented(agent.setup_memory):
+        return "give it memory"
+    if not implemented(agent.download_outputs):
+        return "let it write a postmortem PDF"
+    return None
+
+
 def _offline(fn: str):
-    st.caption(f"agent offline — implement `{fn}()` in `agent.py`")
-    st.chat_input("ask…", disabled=True, key=f"off_{fn}")
+    st.markdown(
+        '<div class="offline"><div class="offline-state"><span class="dot-off"></span>AGENT OFFLINE</div>'
+        '<div class="offline-hint">Three pages are open and nobody is on it yet.<br>'
+        'In Claude Code, type <span class="kbd">get the agent online</span></div></div>',
+        unsafe_allow_html=True)
+    st.chat_input("the agent is offline…", disabled=True, key=f"off_{fn}")
 
 
 def _text(content) -> str:
@@ -142,13 +164,13 @@ def _load_history(session_id: str):
         elif ev.type == "agent.message":
             say("\n\n" + _text(ev.content))
         elif ev.type in ("agent.tool_use", "agent.custom_tool_use"):
+            if getattr(ev, "session_thread_id", None):
+                continue  # a sub-agent's call: too many to list here
             scope = "sandbox" if ev.type == "agent.tool_use" else "local"
-            where = "thread · " if getattr(ev, "session_thread_id", None) else ""
-            say(f"\n\n`{where}{scope} · {ev.name}`")
-        elif ev.type == "session.thread_created":
-            say(f"\n\n`thread · {ev.agent_name} started`")
+            say(f"\n\n`{scope} · {ev.name}`")
         elif ev.type == "agent.thread_message_received":
-            say(f"\n\n`thread · {getattr(ev, 'from_agent_name', None) or 'agent'} reported`")
+            say(f"\n\n`thread · {_incident_in(_text(ev.content)) or 'agent'} reported`")
+    st.session_state.setdefault("lanes", {})[session_id] = _lanes_from_events(events.data)
     return hist
 
 
@@ -174,15 +196,13 @@ def _thread_rows(session_id: str) -> list[dict]:
     return rows
 
 
-def _thread_activity(session_id: str, thread_id: str) -> str:
-    """What a finished sub-agent did, read back from its own event log."""
+def _thread_sandbox_calls(session_id: str, thread_id: str) -> int:
+    """How many sandbox tool calls a finished sub-agent made, from its own event log."""
     try:
         events = load_agent().client.beta.sessions.threads.events.list(thread_id, session_id=session_id, limit=200)
     except Exception:
-        return ""
-    sandbox = sum(1 for e in events.data if e.type == "agent.tool_use")
-    local = sum(1 for e in events.data if e.type == "agent.custom_tool_use")
-    return f"{sandbox} sandbox calls · {local} local tool calls"
+        return 0
+    return sum(1 for e in events.data if e.type == "agent.tool_use")
 
 
 def _fetch_outputs(agent, session_id: str, expect: bool = False) -> list[tuple[str, bytes]]:
@@ -204,34 +224,142 @@ def _render_outputs(slot, session_id: str):
         for name, data in files:
             mime = "application/pdf" if name.lower().endswith(".pdf") else "application/octet-stream"
             st.download_button(f"{name} · {max(1, len(data) // 1024)} KB", data, file_name=name, mime=mime,
-                               icon=":material/download:", key=f"dl_{session_id}_{name}",
+                               icon=":material/download:", key=f"dl_{session_id}_{name}", type="primary",
                                use_container_width=True)
 
 
 def _render_threads(slot, session_id: str):
     rows = st.session_state.get("threads", {}).get(session_id, [])
     if len(rows) > 1:
-        with slot.expander(f"threads · {len(rows)}"):
+        with slot.expander(f"threads · {len(rows)} · agent, model, time, tokens"):
             st.dataframe(rows, hide_index=True, use_container_width=True)
 
 
-def _stream_turn(agent, session_id: str, prompt: str) -> tuple[str, bool]:
-    """Render one agent turn as it streams. Returns (text, wrote_outputs)."""
+# ── thread cards ──────────────────────────────────────────────────────────
+_INCIDENTS = {inc["id"]: inc for inc in incidents}
+
+
+def _new_lane(agent_name: str = "agent") -> dict:
+    return {"name": agent_name, "incident": "", "calls": [], "report": "", "started": time.time(),
+            "seconds": 0, "sandbox": 0, "done": False}
+
+
+def _call_chip(name: str, args) -> tuple[str, str]:
+    """A custom tool call as (kind, short label) for a chip."""
+    args = args if isinstance(args, dict) else {}
+    if name == "get_metrics":
+        service, metric = str(args.get("service", "")), str(args.get("metric", ""))
+        if metric not in metrics.get(service, {}):
+            return "", ""  # a probe for the list of valid names: not worth a chip
+        short = {"p99_latency_ms": "p99", "error_rate": "errors", "db_pool_utilization": "db pool",
+                 "queries_per_sec": "qps", "cpu_utilization": "cpu", "cache_hit_rate": "cache hits"}
+        return "metric", f"{service} {short.get(metric, metric)}"
+    if name == "get_diff":
+        return "diff", f"diff {str(args.get('commit', ''))[:7]}"
+    if name == "get_recent_deploys":
+        return "deploy", "deploys"
+    if name == "list_incidents":
+        return "deploy", "pages"
+    return "metric", name
+
+
+def _root_cause(report: str) -> str:
+    """The investigator's one-line verdict, pulled out of its report."""
+    plain = re.sub(r"[*`>#]", "", report or "")
+    match = re.search(r"root cause\s*:?\s*(.+)", plain, flags=re.IGNORECASE)
+    line = (match.group(1) if match else plain).strip().splitlines()[0] if plain.strip() else ""
+    line = re.sub(r"^(is|was)\s+", "", line.strip(" :-—"))
+    return _short(line[:1].upper() + line[1:], 170)
+
+
+def _lane_html(lane: dict) -> str:
+    inc = _INCIDENTS.get(lane["incident"], {})
+    seconds = lane["seconds"] or int(time.time() - lane["started"])
+    chips, seen = [], set()
+    for kind, label in lane["calls"]:
+        if label and label not in seen:
+            seen.add(label)
+            chips.append(f'<span class="chip {kind}">{escape(label)}</span>')
+    if len(chips) > 9:
+        chips = chips[:9] + [f'<span class="chip more">+{len(chips) - 9} more</span>']
+    if lane["done"]:
+        status = f'<span class="lane-state done">✓ reported · {seconds}s</span>'
+        work = f'{len(lane["calls"])} lookups'
+        if lane["sandbox"]:
+            work += f' · {lane["sandbox"]} sandbox calls'
+        body = (f'<div class="lane-result"><span class="k">ROOT CAUSE</span>{escape(_root_cause(lane["report"]))}</div>'
+                f'<div class="lane-foot">{work}</div>')
+    else:
+        status = f'<span class="lane-state"><span class="dot"></span>investigating · {seconds}s</span>'
+        body = '<div class="lane-foot">working in its own context, in the shared sandbox</div>'
+    return (
+        f'<div class="lane {escape(inc.get("severity", ""))} {"done" if lane["done"] else "running"}">'
+        f'<div class="lane-head"><span class="lane-id">{escape(lane["incident"] or "thread")}</span>'
+        f'<span class="lane-svc">{escape(inc.get("service", lane["name"]))}</span></div>{status}'
+        f'<div class="chips">{"".join(chips) or "<span class=lane-foot>briefed, starting…</span>"}</div>'
+        f'{body}</div>'
+    )
+
+
+def _render_lanes(area, lanes: list[dict], wide: bool):
+    """The threads from the last multiagent turn, side by side when there is room."""
+    if not lanes:
+        return
+    area.markdown(f'<div class="lanes-title">{len(lanes)} INVESTIGATOR THREADS · ran in parallel</div>',
+                  unsafe_allow_html=True)
+    cols = area.columns(min(3, len(lanes))) if wide else [area] * len(lanes)
+    for i, lane in enumerate(lanes):
+        cols[i % len(cols)].markdown(_lane_html(lane), unsafe_allow_html=True)
+    with area.expander("full investigator reports"):
+        for lane in lanes:
+            st.markdown(f"**{lane['incident'] or lane['name']}**\n\n{lane['report'] or '_no report yet_'}")
+
+
+def _lanes_from_events(events) -> list[dict]:
+    """Rebuild the thread cards for a past session from its event log."""
+    lanes: dict[str, dict] = {}
+    for ev in events:
+        if ev.type == "session.thread_created":
+            lanes[ev.session_thread_id] = _new_lane(ev.agent_name)
+            lanes[ev.session_thread_id]["started"] = ev.processed_at.timestamp()
+        elif ev.type == "agent.thread_message_sent" and ev.to_session_thread_id in lanes:
+            lane = lanes[ev.to_session_thread_id]
+            lane["incident"] = lane["incident"] or _incident_in(_text(ev.content))
+        elif ev.type == "agent.custom_tool_use" and getattr(ev, "session_thread_id", None) in lanes:
+            lanes[ev.session_thread_id]["calls"].append(_call_chip(ev.name, ev.input))
+        elif ev.type == "agent.thread_message_received" and ev.from_session_thread_id in lanes:
+            lane = lanes[ev.from_session_thread_id]
+            lane["report"], lane["done"] = _text(ev.content), True
+            lane["incident"] = lane["incident"] or _incident_in(lane["report"])
+            lane["seconds"] = max(1, int(ev.processed_at.timestamp() - lane["started"]))
+    return list(lanes.values())
+
+
+def _stream_turn(agent, session_id: str, prompt: str, lane_area, wide: bool) -> tuple[str, bool, list[dict]]:
+    """Render one agent turn as it streams. Returns (text, wrote_outputs, lanes)."""
     text_ph = st.empty()
     buf, parts = "", []
     tool_boxes: dict[str, object] = {}
     lanes: dict[str, dict] = {}
     wrote_outputs = False
+    lane_area.empty()
+    lane_box = lane_area.container()
+    cols: list = []
 
     def lane_for(thread_id, agent_name="agent"):
         if thread_id not in lanes:
-            box = st.status(f"thread · {agent_name}", state="running")
-            lanes[thread_id] = {"box": box, "name": agent_name, "incident": ""}
+            if not cols:
+                lane_box.markdown('<div class="lanes-title">INVESTIGATOR THREADS · working in parallel</div>',
+                                  unsafe_allow_html=True)
+                cols.extend(lane_box.columns(3) if wide else [lane_box])
+            lane = _new_lane(agent_name)
+            lane["slot"] = cols[len(lanes) % len(cols)].empty()
+            lanes[thread_id] = lane
         return lanes[thread_id]
 
-    def relabel(lane, state_name):
-        tag = f"{lane['incident']} · " if lane["incident"] else ""
-        lane["box"].update(label=f"thread · {tag}{lane['name']}", state=state_name)
+    def redraw(lane=None):
+        for one in ([lane] if lane else lanes.values()):
+            one["slot"].markdown(_lane_html(one), unsafe_allow_html=True)
 
     for ev in agent.stream_reply(session_id, prompt):
         kind = ev.type
@@ -244,7 +372,8 @@ def _stream_turn(agent, session_id: str, prompt: str) -> tuple[str, bool]:
             wrote_outputs = wrote_outputs or "/mnt/session/outputs" in args
             thread_id = getattr(ev, "session_thread_id", None)
             if thread_id:  # a sub-agent's call, cross-posted to the session stream
-                lane_for(thread_id)["box"].markdown(f"`{scope} · {ev.name}` {_short(args) if args != '{}' else ''}")
+                lane_for(thread_id)["calls"].append(_call_chip(ev.name, ev.input))
+                redraw()  # every card, so the timers tick together
             else:
                 box = st.status(f"{scope} · {ev.name}", state="running")
                 box.caption("args")
@@ -258,26 +387,18 @@ def _stream_turn(agent, session_id: str, prompt: str) -> tuple[str, bool]:
                 box.code(_text(ev.content)[:1500] or "(empty)", language="text")
                 box.update(state="complete")
         elif kind == "session.thread_created":
-            lane_for(ev.session_thread_id, ev.agent_name)
+            redraw(lane_for(ev.session_thread_id, ev.agent_name))
         elif kind == "agent.thread_message_sent":
             lane = lane_for(ev.to_session_thread_id, getattr(ev, "to_agent_name", None) or "agent")
-            brief = _text(ev.content)
-            lane["incident"] = lane["incident"] or _incident_in(brief)
-            relabel(lane, "running")
-            lane["box"].caption("brief")
-            lane["box"].markdown(_short(brief, 400))
+            lane["incident"] = lane["incident"] or _incident_in(_text(ev.content))
+            redraw(lane)
         elif kind == "agent.thread_message_received":
             lane = lane_for(ev.from_session_thread_id, getattr(ev, "from_agent_name", None) or "agent")
-            report = _text(ev.content)
-            lane["incident"] = lane["incident"] or _incident_in(report)
-            lane["box"].caption("report")
-            lane["box"].markdown(report[:2500])
-            activity = _thread_activity(session_id, ev.from_session_thread_id)
-            if activity:
-                lane["box"].caption(activity)
-            relabel(lane, "complete")
-        elif kind == "session.thread_status_running" and ev.session_thread_id in lanes:
-            relabel(lanes[ev.session_thread_id], "running")
+            lane["report"], lane["done"] = _text(ev.content), True
+            lane["incident"] = lane["incident"] or _incident_in(lane["report"])
+            lane["seconds"] = max(1, int(time.time() - lane["started"]))
+            lane["sandbox"] = _thread_sandbox_calls(session_id, ev.from_session_thread_id)
+            redraw()
         elif kind == "span.model_request_start":
             if buf:
                 parts.append(buf)
@@ -294,22 +415,31 @@ def _stream_turn(agent, session_id: str, prompt: str) -> tuple[str, bool]:
 
     for box in tool_boxes.values():
         box.update(state="complete")
-    for lane in lanes.values():
-        relabel(lane, "complete")
     if buf:
         parts.append(buf)
-    done = [f"`thread · {lane['incident'] or lane['name']} done`" for lane in lanes.values()]
-    return "\n\n".join(done + parts), wrote_outputs
+    finished = [{k: v for k, v in lane.items() if k != "slot"} for lane in lanes.values()]
+    return "\n\n".join(parts), wrote_outputs, finished
 
 
-def chat_panel():
+def chat_panel(wide: bool = False):
+    """The agent panel. `wide` is the roomy layout used on the Overview page."""
     import anthropic
 
     agent = load_agent()
-    st.markdown("##### SRE AGENT")
+    parts = [("multiagent", agent.setup_investigator), ("memory stores", agent.setup_memory),
+             ("file output", agent.download_outputs)]
+    pills = " &nbsp; ".join(
+        f'<span class="pill {"ok" if implemented(fn) else "off"}">{label} {"on" if implemented(fn) else "off"}</span>'
+        for label, fn in parts)
+    todo = next_step(agent)
+    online = all(implemented(getattr(agent, fn)) for fn in PART_ONE)
+    hint = (f'<div class="next-step">NEXT · in Claude Code, type <span class="kbd">{todo}</span></div>' if todo and online
+            else "" if todo else '<div class="next-step done">ALL FOUR PARTS ARE ON</div>')
+    st.markdown(f'<div class="agent-head"><span class="agent-title">SRE AGENT</span> &nbsp; {pills}</div>{hint}',
+                unsafe_allow_html=True)
 
     ids = {}
-    for label, fn in [("env", "setup_environment"), ("log file", "upload_log"), ("agent", "setup_agent")]:
+    for fn in ("setup_environment", "upload_log", "setup_agent"):
         try:
             ids[fn] = getattr(agent, fn)()
         except NotImplementedError:
@@ -317,15 +447,7 @@ def chat_panel():
         except anthropic.APIError as exc:
             st.error(f"`{fn}()` failed: {getattr(exc, 'message', exc)}")
             return
-        st.caption(f"{label} · `{ids[fn]}`")
     env_id, log_id, agent_id = ids["setup_environment"], ids["upload_log"], ids["setup_agent"]
-
-    parts = [("multiagent", agent.setup_investigator), ("memory stores", agent.setup_memory),
-             ("file output", agent.download_outputs)]
-    st.markdown(" &nbsp; ".join(
-        f'<span class="pill {"ok" if implemented(fn) else "off"}">{label} {"on" if implemented(fn) else "off"}</span>'
-        for label, fn in parts), unsafe_allow_html=True)
-    st.caption(f"you are `{state.handle()}` · every resource you create carries that tag")
 
     # ── session picker: sessions are stateful + persisted server-side.
     # Never auto-create — resume the newest existing one, or show an empty state.
@@ -334,8 +456,8 @@ def chat_panel():
         st.session_state.sid = listed[0][0]
         st.session_state.hist = _load_history(st.session_state.sid)
     sid = st.session_state.get("sid")
-    st.session_state.setdefault("outputs", {})
-    st.session_state.setdefault("threads", {})
+    for key in ("outputs", "threads", "lanes"):
+        st.session_state.setdefault(key, {})
 
     labels = dict(listed)
     ids_listed = [s for s, _ in listed]
@@ -351,7 +473,7 @@ def chat_panel():
     if sid:
         st.session_state.session_picker = sid
 
-    pick_col, new_col, del_col = st.columns([6, 1, 1])
+    pick_col, new_col, del_col = st.columns([8, 1, 1] if wide else [6, 1, 1])
     pick_col.selectbox(
         "session", ids_listed, format_func=lambda v: labels.get(v, v), disabled=not ids_listed,
         label_visibility="collapsed", key="session_picker", on_change=_on_pick,
@@ -380,12 +502,15 @@ def chat_panel():
             del st.session_state["sid"]
             st.rerun()
 
+    with st.expander(f"resources · you are `{state.handle()}`"):
+        st.caption(f"agent · `{agent_id}`  \nenv · `{env_id}`  \nlog file · `{log_id}`  \nsession · `{sid or '—'}`")
+        st.caption("Persisted in the cloud, not this browser. Every resource you create carries your tag.")
+
     if not sid:
         st.caption("no sessions — click **+** to start one")
         st.chat_input("ask…", disabled=True, key="off_nosession")
         return
 
-    st.caption(f"`{sid}` — persisted in the cloud, not this browser")
     if sid not in st.session_state.outputs:
         try:
             st.session_state.outputs[sid] = _fetch_outputs(agent, sid)
@@ -394,21 +519,29 @@ def chat_panel():
     if sid not in st.session_state.threads:
         st.session_state.threads[sid] = _thread_rows(sid)
 
-    chat = st.container(height=400, border=False)
+    # Commander on top, the investigator threads it started underneath.
+    downloads = st.container()
+    chat = st.container(height=330 if wide else 400, border=False)
+    input_slot = st.container()
+    lane_area = st.empty()
     with chat:
         for role, text in st.session_state.hist:
             with st.chat_message(role):
                 st.markdown(text)
-    extras = st.container()
+        if not st.session_state.hist:
+            ask = ("*Three pages are open. Run the incident.*" if implemented(agent.setup_investigator)
+                   else "*What caused the checkout latency spike?*")
+            more = " Then: *Write the postmortem PDF.*" if implemented(agent.download_outputs) else ""
+            st.caption(f"New session. Try: {ask}{more}")
 
-    if q := st.chat_input("ask the agent…"):
+    if q := input_slot.chat_input("ask the agent…"):
         st.session_state.hist.append(("user", q))
         with chat:
             with st.chat_message("user"):
                 st.markdown(q)
             with st.chat_message("assistant"):
                 try:
-                    reply, wrote_outputs = _stream_turn(agent, sid, q)
+                    reply, wrote_outputs, lanes = _stream_turn(agent, sid, q, lane_area, wide)
                 except NotImplementedError:
                     st.warning("implement `stream_reply()` / `handle_tool()` in `agent.py`")
                     return
@@ -416,11 +549,15 @@ def chat_panel():
                     st.error(f"`stream_reply()` failed: {getattr(exc, 'message', exc)}")
                     return
         st.session_state.hist.append(("assistant", reply))
+        if lanes:
+            st.session_state.lanes[sid] = lanes
         st.session_state.threads[sid] = _thread_rows(sid)
         try:
             st.session_state.outputs[sid] = _fetch_outputs(agent, sid, expect=wrote_outputs)
         except anthropic.APIError as exc:
             st.warning(f"`download_outputs()` failed: {getattr(exc, 'message', exc)}")
+        st.rerun()
 
-    _render_outputs(extras, sid)
-    _render_threads(extras, sid)
+    _render_outputs(downloads, sid)
+    _render_lanes(lane_area.container(), st.session_state.lanes.get(sid, []), wide)
+    _render_threads(st.container(), sid)
