@@ -44,7 +44,15 @@ client = anthropic.Anthropic()
 #       create=lambda: client.beta.environments.create(name=state.name("env"), config=config, metadata=state.owner()),
 #       update=lambda env_id: client.beta.environments.update(env_id, config=config))
 def setup_environment() -> str:
-    raise NotImplementedError
+
+    config = {"type": "cloud", "networking": {"type": "unrestricted"}}
+    return state.sync(
+        "environment", config,
+        create=lambda: client.beta.environments.create(
+            name=state.name("env"), config=config, metadata=state.owner()),
+        update=lambda env_id: client.beta.environments.update(env_id, config=config)
+    )
+    
 
 
 # ── 2. Upload the log ─────────────────────────────────────────────────────
@@ -52,8 +60,13 @@ def setup_environment() -> str:
 #   client.beta.files.upload(file=<open binary file>)   -> object with .id
 #   state.sync("log", {"bytes": <file size>}, create=...)
 def upload_log() -> str:
-    raise NotImplementedError
+    path = DATA / "app.log"
 
+    def upload():
+        with open(path, "rb") as f:
+            return client.beta.files.upload(file=f)
+
+    return state.sync("log", {"bytes": path.stat().st_size}, create=upload)
 
 # ── 3. Skills ─────────────────────────────────────────────────────────────
 # A skill is a folder (SKILL.md plus optional scripts) the agent loads on demand.
@@ -63,8 +76,24 @@ def upload_log() -> str:
 #   state.sync(f"skill:{folder}", state.dir_fingerprint(path), create, update)
 # Return the reference an agent uses: {"type": "custom", "skill_id": ..., "version": "latest"}
 def setup_skill(folder: str) -> dict:
-    raise NotImplementedError
+    path = SKILLS / folder
+    skill_id = state.sync(
+        f"skill:{folder}", state.dir_fingerprint(path),
+        create=lambda: client.beta.skills.create(
+            display_title=f"{folder} ({state.handle()})", files=files_from_dir(path)),
+        update=lambda skill_id: client.beta.skills.versions.create(skill_id, files=files_from_dir(path)),
+    )
+    return {"type": "custom", "skill_id": skill_id, "version": "latest"}
 
+
+def _save_agent(key: str, config: dict) -> str:
+    """Create the agent once; after that, a changed config becomes a new version."""
+    return state.sync(
+        key, config,
+        create=lambda: client.beta.agents.create(**config),
+        update=lambda agent_id: client.beta.agents.update(
+            agent_id, version=client.beta.agents.retrieve(agent_id).version, **config),
+    )
 
 # ── 4. Agent ──────────────────────────────────────────────────────────────
 # What the agent IS: model, system prompt, tools, skills. Versioned: create it
@@ -82,8 +111,21 @@ def setup_skill(folder: str) -> dict:
 #   (call setup_investigator() before reading state.version("investigator"))
 # Part 4 adds setup_skill("postmortem-report") to skills.
 def setup_agent() -> str:
-    raise NotImplementedError
-
+    investigator_id = setup_investigator()  # Part 2
+    return _save_agent("agent", dict(
+        name=state.name("commander"),
+        model=COMMANDER_MODEL,
+        system=COMMANDER_SYSTEM,
+        tools=TOOLS,
+        skills=[setup_skill("incident-triage-runbook")],  # Part 4 adds setup_skill("postmortem-report")
+        # Part 2: the roster. Pinning the version means a changed investigator
+        # changes this config too, so the commander is re-saved and picks it up.
+        multiagent={
+            "type": "coordinator",
+            "agents": [{"type": "agent", "id": investigator_id, "version": state.version("investigator")}],
+        },
+        metadata=state.owner(),
+    ))
 
 # ── 5. Session ────────────────────────────────────────────────────────────
 # One running conversation: agent + environment + mounted resources.
@@ -92,7 +134,16 @@ def setup_agent() -> str:
 # The file lands at /mnt/session/uploads/app.log.
 # Part 3 adds the two memory resources: resources=[{...file...}, *setup_memory()]
 def start_session(agent_id: str, env_id: str, log_file_id: str) -> str:
-    raise NotImplementedError
+    session = client.beta.sessions.create(
+        agent=agent_id,
+        environment_id=env_id,
+        resources=[
+            {"type": "file", "file_id": log_file_id, "mount_path": "app.log"},
+            # *setup_memory(),  # Part 3
+        ],
+        metadata=state.owner(),
+    )
+    return session.id
 
 
 # ── 6. Stream loop ────────────────────────────────────────────────────────
@@ -108,7 +159,29 @@ def start_session(agent_id: str, env_id: str, log_file_id: str) -> str:
 # Stop when ev.type == "session.status_terminated", or when it is "session.status_idle"
 # and ev.stop_reason.type != "requires_action" ("requires_action" means it is waiting on you).
 def stream_reply(session_id: str, user_text: str):
-    raise NotImplementedError
+    with client.beta.sessions.events.stream(session_id) as stream:
+        client.beta.sessions.events.send(
+            session_id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": user_text}]}],
+        )
+        for ev in stream:
+            yield ev
+            if ev.type == "agent.custom_tool_use":
+                # A sub-agent's call is cross-posted here with session_thread_id
+                # set. Answer it the same way: the server routes by the id.
+                client.beta.sessions.events.send(
+                    session_id,
+                    events=[{
+                        "type": "user.custom_tool_result",
+                        "custom_tool_use_id": ev.id,
+                        "content": [{"type": "text", "text": handle_tool(ev.name, ev.input)}],
+                    }],
+                )
+            elif ev.type == "session.status_terminated":
+                return
+            elif ev.type == "session.status_idle" and ev.stop_reason.type != "requires_action":
+                return  # end_turn or retries_exhausted; requires_action means "waiting on you"
+
 
 
 # ── 7. Local tool handlers ────────────────────────────────────────────────
@@ -119,13 +192,23 @@ def stream_reply(session_id: str, user_text: str):
 #   get_recent_deploys  -> deploys
 #   get_diff            -> diffs[commit[:7]], or a "no diff on file" message
 def handle_tool(name: str, args: dict) -> str:
-    raise NotImplementedError
-
+    if name == "list_incidents":
+        return json.dumps(incidents)
+    if name == "get_metrics":
+        series = metrics.get(args.get("service", ""), {}).get(args.get("metric", ""))
+        if series is None:
+            return "unknown service or metric. valid: " + json.dumps({s: list(m) for s, m in metrics.items()})
+        return json.dumps(series)
+    if name == "get_recent_deploys":
+        return deploys
+    if name == "get_diff":
+        return diffs.get(str(args.get("commit", ""))[:7], "no diff on file for that commit")
+    return f"unknown tool {name}"
 
 # ── 8. Delete session ─────────────────────────────────────────────────────
 # Sessions are real cloud resources: client.beta.sessions.delete(session_id)
 def delete_session(session_id: str) -> None:
-    raise NotImplementedError
+    client.beta.sessions.delete(session_id)
 
 
 # ══ PART 2 · multiagent ═══════════════════════════════════════════════════
@@ -136,7 +219,14 @@ def delete_session(session_id: str) -> None:
 # A sub-agent only has the tools in its own config, so it needs TOOLS too.
 # Then add the roster to setup_agent() (see the note there).
 def setup_investigator() -> str:
-    raise NotImplementedError
+    return _save_agent("investigator", dict(
+        name=state.name("investigator"),
+        model=INVESTIGATOR_MODEL,
+        system=INVESTIGATOR_SYSTEM,
+        tools=TOOLS,
+        skills=[setup_skill("incident-triage-runbook")],
+        metadata=state.owner(),
+    ))
 
 
 # ══ PART 3 · memory stores ════════════════════════════════════════════════
@@ -165,6 +255,7 @@ def setup_investigator() -> str:
 # If the notebook instructions never say to write, the agent never will.
 def setup_memory() -> list[dict]:
     raise NotImplementedError
+
 
 
 # ══ PART 4 · file output ══════════════════════════════════════════════════
